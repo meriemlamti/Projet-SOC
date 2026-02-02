@@ -82,7 +82,7 @@ To ensure consistent and scalable network management, a static addressing plan h
 | :--- | :--- | :--- | :--- |
 | **FW-OPN-01** | Gateway / Firewall | `192.168.10.1` | Default Gateway for the LAN. |
 | **SRV-DC-01** | Domain Controller | `192.168.10.10` | Primary DNS and Auth Server. |
-| **CLT-W10** | Client Workstation | DHCP (`.50` - `.100`) | Simulates end-user activity. |
+| **CLT-W10** | Client Workstation | `192.168.10.10` | Simulates end-user activity. |
 ---
 # 3. Phase 1 Implementation: Setup and Connectivity
 
@@ -215,11 +215,10 @@ To deploy the required services, we used the **Server Manager** dashboard to ins
 4.  **Server Roles:** We explicitly checked the following critical roles:
     * ☑️ **Active Directory Domain Services (AD DS):** The core identity service.
     * ☑️ **DNS Server:** Required for domain name resolution.
-    * ☑️ **DHCP Server:** To automatically assign IPs to client workstations.
-5.  **Features:** Accepted the default features and the management tools (RSAT) automatically proposed by the wizard.
+5.  **Features:** Accepted the default features and the management tools  automatically proposed by the wizard.
 6.  **Confirmation:** Clicked **Install** and waited for the process to complete.
 
-*Result:* Upon completion, the new roles (AD DS, DNS, DHCP) appeared in the Server Manager Dashboard with warning notifications indicating that configuration was required.
+*Result:* Upon completion, the new roles (AD DS, DNS) appeared in the Server Manager Dashboard with warning notifications indicating that configuration was required.
 
 ---
 
@@ -242,28 +241,11 @@ Installing the AD DS role does not automatically activate the domain. We had to 
 
 ---
 
-## 4.5 DHCP Service Configuration
-After the server rebooted as a Domain Controller, the DHCP service required authorization to function within the Active Directory.
-
-
-
-**Procedure:**
-1.  Opened the **Notification Flag (⚠️)** in Server Manager again.
-2.  Selected **"Complete DHCP Configuration"**.
-3.  **Authorization:** Used the `SECURINETSENIT\Administrator` credentials to authorize the DHCP server (target: `192.168.10.10`) in AD.
-4.  **Scope Creation:**
-    * Opened the **DHCP Manager** console (`dhcpmgmt.msc`).
-    * Created a **New Scope** (IPv4) named "Workstations".
-    * **Address Pool:** `192.168.10.100` to `192.168.10.200`.
-    * **Scope Options (Critical):**
-        * **Router (Gateway):** `192.168.10.1`
-        * **DNS Server:** `192.168.10.10` (The AD Server itself)
----
-## 4.6 Organizational Unit (OU) Structure
+## 4.5 Organizational Unit (OU) Structure
 
 The OU structure is designed to logically separate directory objects and facilitate targeted Group Policy Object (GPO) application and delegation of control based on the Principle of Least Privilege (PoLP).
 
-### 4.6.1 Target Hierarchy
+### 4.5.1 Target Hierarchy
 We have implemented a custom hierarchical structure using the prefix `_` (underscore) to distinguish our managed OUs from the default system containers.
 
 
@@ -285,7 +267,7 @@ We have implemented a custom hierarchical structure using the prefix `_` (unders
 
 ---
 
-### 4.6.2 Technical Rationale: Why `_USERS` and `_COMPUTERS`?
+### 4.5.2 Technical Rationale: Why `_USERS` and `_COMPUTERS`?
 A critical design decision was made to create custom Organizational Units named **`_USERS`** and **`_COMPUTERS`** instead of using the default "Users" and "Computers" folders provided by Microsoft.
 
 **1. The "Container" Limitation (CN vs. OU)**
@@ -300,7 +282,7 @@ Since "Users" and "Computers" already exist as system objects, we cannot reuse t
 
 ---
 
-### 4.6.3 Implementation Method 1: Graphical User Interface (GUI)
+### 4.5.3 Implementation Method 1: Graphical User Interface (GUI)
 The structure was initially prototyped using the **Active Directory Users and Computers (ADUC)** console (`dsa.msc`).
 
 
@@ -314,7 +296,7 @@ The structure was initially prototyped using the **Active Directory Users and Co
 
 ---
 
-### 4.6.4 Implementation Method 2: PowerShell Automation
+### 4.5.4 Implementation Method 2: PowerShell Automation
 To ensure reproducibility, the final structure was deployed using a PowerShell script. This confirms that our custom hierarchy supports the required nesting, unlike the default containers.
 
 **PowerShell Script Used:**
@@ -345,7 +327,7 @@ New-ADOrganizationalUnit -Name "Marketing" -Path "OU=Departments,OU=_USERS,$Doma
 New-ADOrganizationalUnit -Name "IT" -Path "OU=Departments,OU=_USERS,$DomainPath"
 ```
 ---
-## 4.7 Technical Team Delegation
+## 4.6 Technical Team Delegation
 
 ### Requirement Analysis
 The **Technical Team** acts as "Server Operators" and "IT Managers". They need elevated rights on specific assets without holding full Domain Admin privileges.
@@ -395,7 +377,7 @@ The restrictions are enforced by the default Active Directory security model:
 
 ---
 
-## 4.8 Finance Department Configuration
+## 4.7 Finance Department Configuration
 
 ### Requirement Analysis
 Based on the project delegation matrix, the **Finance Department** requires specific access to perform their duties while maintaining strict security boundaries.
@@ -403,7 +385,6 @@ Based on the project delegation matrix, the **Finance Department** requires spec
 * **Target Group:** `SECURINETS\Finance Department`
 * **Allowed Permissions:**
     * Read and write access to financial shared folders.
-    * Automatic mapping of department storage (Specific GPO).
     * **Logon rights** to accounting servers (Remote Access).
 * **Denied Permissions:**
     * Installing software or changing network settings.
@@ -426,30 +407,13 @@ We created a central repository for financial data with strict Access Control Li
     * Permission Level: **Modify** (Allows Read, Write, Edit, Delete, but *not* changing ownership or permissions).
     * *Note:* Other departments (Marketing) are not added, ensuring the "Denied" requirement is met by default.
 
-#### B. Drive Mapping (Department-Specific GPO)
-To facilitate easy access to the data, we configured an automatic drive map that appears only for Finance users.
 
+#### B. Server Logon Rights 
+> **⚠️ Technical Prerequisite**
+> To implement this task securely, a dedicated **Member Server** is required.
+> Since standard users (Finance) must never access a Domain Controller via RDP, this configuration awaits the deployment of a separate server to be fully active.
 
-
-* **GPO Name:** `Finance - Drive Map`
-* **Linked OU:** `USERS / Departments / Finance`
-* **Configuration Path:** `User Configuration > Preferences > Windows Settings > Drive Maps`
-* **Settings:**
-    * **Action:** Update
-    * **Location:** `\\AD-DC01\finance.data`
-    * **Drive Letter:** `F:`
-    * **Label:** Finance Data
-
-#### C. Server Logon Rights (The "VIP List")
-By default, standard users cannot log on to Windows Servers. We explicitly granted this right to Finance staff for the accounting server.
-
-* **GPO Name:** `Server Access - Finance`
-* **Linked OU:** `Domain Controllers` (or the specific OU containing the Accounting Server).
-* **Configuration Path:** `Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > User Rights Assignment`.
-* **Policy Modified:** *Allow log on through Remote Desktop Services*.
-* **Action:** Added group `SECURINETS\Finance Department`.
-
-#### D. Security Restrictions (Permissions Denied)
+#### C. Security Restrictions (Permissions Denied)
 We ensured the "Denied" column is respected through the Principle of Least Privilege:
 
 * **No Software Installation:** The Finance group is **NOT** added to the "Local Administrators" group. Therefore, User Account Control (UAC) automatically blocks any attempt to install software or change IP addresses.
@@ -554,7 +518,9 @@ We configured Windows Defender Firewall to allow RDP traffic **only from the IT 
     * **Local IP:** `Any IP address` (Applies to all workstations).
     * **Remote IP:** `192.168.10.0/24` (Restricted to IT Subnet).
 
-**Security Benefit:** This prevents lateral movement. A compromised user in the Finance department cannot attempt to RDP into other workstations, as the firewall drops the packet immediately.
+**Security Analysis: Why Finance users are blocked despite the open Firewall**
+Although the Firewall allows network traffic from the entire `192.168.10.0/24` subnet (including Finance), security is guaranteed at the **Authentication Layer**.
+Since the RDP service is restricted strictly to **Local Administrators** (via the GPO settings), any Finance user attempting to connect will pass the firewall check but will be **rejected by the Operating System** during the login phase regarding insufficient privileges.
 
 #### C. Active Directory Delegation
 To allow IT staff to join new computers to the domain:
@@ -622,20 +588,14 @@ This section details the implementation of the security strategies defined previ
 **1. Password Complexity Requirements**
 * **Setting:** **Password must meet complexity requirements**
 * **Value:** **Enabled**
-> **💡 Technical Rationale:**
-> * **Anti-Dictionary Attack:** Forces users to use a mix of uppercase, lowercase, numbers, and symbols. This prevents the use of simple words found in common hacking dictionaries.
 
 **2. Minimum Password Length**
 * **Setting:** **Minimum password length**
 * **Value:** **14 Characters**
-> **💡 Technical Rationale:**
-> * **Brute-Force Resistance:** A 14-character password is exponentially harder to crack than the default 7 or 8 characters. According to modern security standards (NIST), length is the most significant factor in password strength.
 
 **3. Maximum Password Age**
 * **Setting:** **Maximum password age**
 * **Value:** **45 Days**
-> **💡 Technical Rationale:**
-> * **Exposure Limitation:** If a password is compromised without the user's knowledge, this policy limits the attacker's window of opportunity to 45 days before the credential expires and becomes useless.
 
 #### B. Account Lockout Policy
 **Scope:** `Computer Configuration > Policies > Windows Settings > Security Settings > Account Policies > Account Lockout Policy`
@@ -670,32 +630,30 @@ This section details the implementation of the security strategies defined previ
 * **Settings:**
     1. **Screen saver timeout:** **600 seconds** (10 minutes).
     2. **Password protect the screen saver:** **Enabled**.
-> **💡 Technical Rationale:**
-> * **Physical Security:** This enforces a "Clean Desk Policy." If a user leaves their workstation unattended, the session automatically locks after 10 minutes, preventing unauthorized physical access to sensitive company data.
 
 **B. Corporate Branding**
 * **Scope:** `User Configuration > Policies > Administrative Templates > Desktop > Desktop`
 * **Setting:** **Desktop Wallpaper**
 * **Value:** `\\AD-DC01\NETLOGON\Wallpaper.jpg`
-> **💡 Technical Rationale:**
-> * **Professionalism:** Standardizes the desktop environment across the organization, ensuring a consistent professional appearance and reinforcing corporate identity.
+
 
 #### Part 2: GPO - Non-IT Users Standard Security
 **Target:** Restricted Users (Finance & Marketing Departments ONLY)
+**Note: IT Administrator Exclusion**
+To preserve administrative access to system tools, the `SECURINETS\IT Department` group was added to the GPO's **Delegation > Advanced** tab with the **Apply Group Policy** permission set to **DENY**.
+
+> **💡 Technical Rationale:**
+> In Active Directory security logic, **"Deny" permissions always take precedence over "Allow" permissions**. This configuration effectively "punctures a hole" in the security wall, allowing IT staff to bypass restrictions (like the blocked Command Prompt) to perform maintenance, even while the rest of the department remains locked down.
 
 **C. System Access Restrictions**
 * **Scope:** `User Configuration > Policies > Administrative Templates > Control Panel`
 * **Setting:** **Prohibit access to Control Panel and PC settings**
 * **Value:** **Enabled**
-> **💡 Technical Rationale:**
-> * **System Integrity:** Prevents non-technical users from modifying system configurations, changing hardware settings, or attempting to uninstall security software. This significantly reduces the risk of accidental misconfiguration and lowers helpdesk support costs.
 
 **D. Command-Line Lockdown**
 * **Scope:** `User Configuration > Policies > Administrative Templates > System`
 * **Setting:** **Prevent access to the command prompt**
 * **Value:** **Enabled** (Options: Disable the command prompt script processing? > **Yes**)
-> **💡 Technical Rationale:**
-> * **Attack Surface Reduction:** For non-IT roles, there is no legitimate business need for `cmd.exe`. By disabling it, we block a primary tool used by attackers to run discovery commands, execute malicious scripts, or perform lateral movement within the network.
 
 **Implementation Matrix**
 
@@ -722,8 +680,6 @@ This section details the implementation of the security strategies defined previ
 * **Path:** `Windows Firewall with Advanced Security > Windows Firewall`
 * **Setting:** **Domain, Private, and Public Profiles** set to **On**.
 * **Action:** Inbound connections that do not match a rule are set to **Block (default)**.
-> **💡 Technical Rationale:**
-> * **Attack Surface Reduction:** By blocking unused inbound ports, you prevent attackers from "scanning" the workstation for open vulnerabilities (like SMB or RDP exploits) from other infected machines on the same network.
 
 **2. Disable Guest Accounts**
 * **Path:** `Local Policies > Security Options`
@@ -753,11 +709,12 @@ This section details the implementation of the security strategies defined previ
 **5. Remove Local Admin Privileges**
 * **Path:** `Security Settings > Restricted Groups`
 * **Action:** Add group **"Administrators"**.
-* **Members of this group:** `DOMAIN\Domain Admins` (Only).
+* **Members of this group:**
+    1. `SECURINETS\Domain Admins` 
+    2. `SECURINETS\IT Department` 
 > **💡 Technical Rationale:**
 > * **Principle of Least Privilege (PoLP):** By default, users should NOT be local admins on their workstations. If a user is a local admin, malware they accidentally run has full control over the OS.
-> * **Prevention of Lateral Movement:** Restricting local admin rights prevents users from installing unapproved software and stops attackers from easily extracting passwords (hashes) from the memory to move to other computers on the network.
-
+> * **Exclusive Control:** This policy forces the local Administrators group to match this list exactly.
 ---
 
 ### 4.12.4 Server Security Baseline
@@ -805,7 +762,6 @@ This section details the implementation of the security strategies defined previ
 * **Value:** **Enabled**
 > **💡 Technical Rationale:**
 > * **Authentication Stability:** Active Directory uses the Kerberos protocol. If a server's clock is off by more than **5 minutes** from the Domain Controller, users will be unable to log in.
-> * **Log Correlation:** Ensures that time stamps on logs across all servers match exactly, which is vital when comparing events during a security incident.
 
 ---
 
@@ -822,8 +778,6 @@ This section details the implementation of the security strategies defined previ
 * **Scope:** `User Configuration > Policies > Administrative Templates > Windows Components > Windows PowerShell`
 * **Setting:** **Turn on Script Execution**.
 * **Value:** **Enabled** > Execution Policy: **Unrestricted** (or RemoteSigned).
-> **💡 Technical Rationale:**
-> * **Operational Efficiency:** Administrators rely heavily on `.ps1` scripts to automate tasks (creating users, checking server health). By default, Windows blocks script execution; this policy lifts that restriction for the IT team.
 
 **2. Enable RSAT (Remote Server Administration Tools)**
 * **Scope:** `Computer Configuration > Policies > Windows Settings > Scripts (Startup/Shutdown)`
@@ -905,32 +859,11 @@ This section details the implementation of the security strategies defined previ
 > * **Data Loss Prevention (DLP):** Prevents financial officers from copying sensitive databases (payroll, balance sheets) to personal USB drives.
 > * **Attack Surface Reduction:** Stops "USB Drop" attacks where malware is introduced to the network via an infected flash drive.
 
-#### C. Restricted Network Shares (Data Isolation)
-**Scope:** `User Configuration > Preferences > Windows Settings > Drive Maps` (Client Side) & **NTFS Permissions** (Server Side).
-
-**4. Drive Mapping (Convenience)**
-* **Action:** **Update**.
-* **Location:** `\\AD-DC01\FinanceData` (Server Share).
-* **Drive Letter:** **S:** (Secure).
-* **Label:** Finance Data.
-> **💡 Technical Rationale:**
-> * **Workflow:** Provides immediate, standardized access to the financial repository without users needing to browse the network.
-
-**5. Access Control Lists (Security Enforcement)**
-* *Note: This is configured on the File Server, not inside the GPO itself.*
-* **Path:** `C:\FinanceData` > Properties > Security.
-* **Configuration:**
-    * **Removed:** "Everyone", "Authenticated Users", "Marketing Users".
-    * **Added:** **Finance Users** (Modify) and **Admins** (Full Control).
-> **💡 Technical Rationale:**
-> * **Principle of Least Privilege:** Ensures strict confidentiality. Even if a non-finance user maps the drive manually, the server-side NTFS permissions will deny the request. Only users explicitly belonging to the `Finance Users` security group can read or write data.
-
 ---
 ### 4.12.7 Marketing Environment Policy
 
 **Target OU:** `USERS / Departments / Marketing`
 **Target Group:** `Marketing Users`
-**Security Level:** Medium (Productivity & Standard Security)
 **Objective:** Automate browser configuration, enforce web filtering via OPNsense, and strictly lock down system settings to prevent tampering.
 
 
@@ -1003,18 +936,15 @@ This section details the implementation of the security strategies defined previ
 > * **Operational Agility:** IT administrators and developers often need to write quick, disposable scripts to test configurations. The default policy (`RemoteSigned`) would block these local, unsigned scripts.
 > * **Removing Friction:** By switching to `Unrestricted` **only** for the IT department, we unlock their productivity without exposing the rest of the organization. It is a necessary trade-off for a laboratory/testing environment.
 
-#### B. Advanced Auditing & Monitoring (The "Black Box")
+#### B. Advanced Auditing & Monitoring 
 **Scope:** `Computer Configuration > Policies > Administrative Templates` & `Security Settings`
 
 **2. PowerShell Script Block Logging**
 * **Path:** `Windows Components > Windows PowerShell`
 * **Setting:** **Turn on PowerShell Script Block Logging**.
 * **Value:** **Enabled**.
-> **💡 Technical Rationale:**
-> * **Fileless Attack Detection:** Modern attackers inject malicious code directly into memory via PowerShell without touching the hard drive.
-> * **"Black Box" Forensics:** Standard logs only indicate that PowerShell started. This setting records the **exact content** of the executed code. Even if an attacker tries to obfuscate (hide) their code, Windows will decode it and log it in clear text in the Event Viewer.
 
-**3. Privilege Escalation Auditing (Command Line)**
+**3. Privilege Escalation Auditing **
 * **Step 1 (Enable Audit):**
     * *Path:* `Security Settings > Advanced Audit Policy Configuration > Detailed Tracking`.
     * *Setting:* **Audit Process Creation**.
@@ -1027,51 +957,43 @@ This section details the implementation of the security strategies defined previ
 > * **Context and Intent:** Knowing a process started is not enough. It is critical to see the **arguments** used (e.g., `net user admin /add` vs. `net user /help`).
 > * **Accountability:** This trail allows us to distinguish between a harmless administrative error and a malicious insider threat by providing the exact evidence of the command typed by the administrator.
 ---
-# 5. References & Bibliography
+# 5. References & Webography
 
-The design and implementation of this infrastructure rely on a rigorous methodology, combining official vendor documentation (Microsoft), offensive cybersecurity modules, and practical technical guides.
+The design and implementation of this infrastructure relied on a combination of official vendor documentation, cybersecurity training modules, and technical deployment guides.
 
-## 5.1 Cybersecurity & Hardening (Offensive Approach)
-These resources were used to understand common Active Directory (AD) attack vectors in order to define a relevant defense strategy (GPOs, monitoring).
+## 5.1 Official Documentation & Standards
+*Theoretical basis and industry best practices.*
 
-| Source | Topic / Module | URL |
-| :--- | :--- | :--- |
-| **HackTheBox Academy** | **Introduction to Active Directory** (Module 74)<br>This foundational module was used to master the underlying protocols and structure of the environment.<br><br>**Key Sections Applied:**<br>• *Active Directory Structure & Objects*<br>• *Kerberos, DNS, LDAP, MSRPC Protocols*<br>• *Security in Active Directory*<br>• *Examining Group Policy* | [View Module](https://academy.hackthebox.com/module/details/74) |
+* **[1] Microsoft Learn.** "Install Active Directory Domain Services (Level 100)." *Microsoft.com*. [Online].
+  * Available: [https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/deploy/install-active-directory-domain-services--level-100-](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/deploy/install-active-directory-domain-services--level-100-)
 
-## 5.2 Official Microsoft Documentation
-These documents constitute the theoretical basis of the project and ensure that the deployment adheres to industry standards ("Best Practices").
+* **[2] Microsoft Download Center.** "Group Policy Settings Reference Spreadsheet." *Microsoft.com*, Windows Server Baseline. [Online].
+  * Available: [https://www.microsoft.com/en-us/download/details.aspx?id=25250](https://www.microsoft.com/en-us/download/details.aspx?id=25250)
 
-| Source | Document / Tool | URL |
-| :--- | :--- | :--- |
-| **Microsoft Learn** | *Install Active Directory Domain Services (Level 100)*<br>Official technical guide followed for the deployment of AD DS roles. | [Microsoft Guide](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/deploy/install-active-directory-domain-services--level-100-) |
-| **Microsoft Download** | *Group Policy Settings Reference Spreadsheet*<br>Official Excel file listing all available security settings. Used as a reference baseline for configuration hardening. | [Download (Excel)](https://www.microsoft.com/en-us/download/details.aspx?id=25250) |
+## 5.2 Cybersecurity Training Resources
+*Resources used to understand Active Directory attack vectors and defense strategies.*
 
-## 5.3 Technical Articles & Administration
-Resources used for daily management and understanding of administration tools.
+* **[3] HackTheBox Academy.** "Module 74: Introduction to Active Directory." *HackTheBox.com*.
+  * *Topics applied: AD Structure (Forest/Domain), Kerberos/LDAP protocols, and Security Hardening.*
+  * URL: [https://academy.hackthebox.com/module/details/74](https://academy.hackthebox.com/module/details/74)
 
-| Source | Article | URL |
-| :--- | :--- | :--- |
-| **Netwrix Blog** | *How to Install and Use Active Directory Users and Computers*<br>Detailed tutorial on using the ADUC console and managing objects. | [Read Article](https://netwrix.com/en/resources/blog/how-to-install-and-use-active-directory-users-and-computers/) |
+## 5.3 Technical Administration Guides
+*Operational guides for system configuration and tool management.*
 
-## 5.4 Implementation Tutorials (Virtual Lab)
-These video guides served as visual support for the step-by-step configuration of the virtual infrastructure components.
+* **[4] Netwrix Blog.** "How to Install and Use Active Directory Users and Computers." *Netwrix.com*. [Online].
+  * URL: [https://netwrix.com/en/resources/blog/how-to-install-and-use-active-directory-users-and-computers/](https://netwrix.com/en/resources/blog/how-to-install-and-use-active-directory-users-and-computers/)
 
-### A. Network Infrastructure & Security (Firewall)
-* **OPNsense Firewall Deployment**
-    * *Objective:* Installing OPNsense on VirtualBox.
-    * *Link:* [How To Install OPNsense on VirtualBox – Step by Step Guide](https://youtu.be/naYU8UR5BhQ?si=g3b0FmLPQtandvUh)
+## 5.4 Virtualization & Deployment References (Video Support)
+*Technical support for the step-by-step configuration of the virtual lab environment.*
 
-### B. Server Infrastructure (Domain Controller)
-* **Server Virtualization**
-    * *Objective:* Installation of the Windows Server 2022 OS on the hypervisor.
-    * *Link:* [Installation Windows Server 2022 sur VirtualBox](https://www.youtube.com/watch?v=veDylTdgYPU)
-* **Active Directory Configuration**
-    * *Objective:* Server promotion, forest creation, and DNS configuration.
-    * *Link:* [How to Setup Active Directory Domain on Windows Server 2022](https://youtu.be/FDhndiAEyxs?si=ko4B9DqppILjNQA1)
+* **[5] OPNsense Deployment.** "How To Install OPNsense on VirtualBox – Step by Step Guide," *YouTube*.
+  * URL: [https://youtu.be/naYU8UR5BhQ](https://youtu.be/naYU8UR5BhQ)
 
-### C. Client Workstations & Integration
-* **Workstation Deployment**
-    * *Objective:* Installing Windows 10 via ISO. 
-    * *Link:* [Windows 10 ISO Setup & Installation](https://www.youtube.com/watch?v=K-8wW_QRORI)
+* **[6] Server Virtualization.** "Installation Windows Server 2022 sur VirtualBox," *YouTube*.
+  * URL: [https://www.youtube.com/watch?v=veDylTdgYPU](https://www.youtube.com/watch?v=veDylTdgYPU)
 
+* **[7] Active Directory Setup.** "How to Setup Active Directory Domain on Windows Server 2022," *YouTube*.
+  * URL: [https://youtu.be/FDhndiAEyxs](https://youtu.be/FDhndiAEyxs)
 
+* **[8] Client Deployment.** "Windows 10 ISO Setup & Installation," *YouTube*.
+  * URL: [https://www.youtube.com/watch?v=K-8wW_QRORI](https://www.youtube.com/watch?v=K-8wW_QRORI)
