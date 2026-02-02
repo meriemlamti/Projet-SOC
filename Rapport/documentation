@@ -1,0 +1,215 @@
+# RAPPORT DE PROJET INTERNE : Déploiement et Sécurisation d'une Infrastructure Active Directory
+
+**Organisation :** Securinets ENIT
+**Auteur :** Mariem Lamti
+**Date :** 31 Janvier 2026
+
+---
+
+## Remerciements
+
+Je remercie le club Securinets ENIT, dont je suis membre, pour les ressources et l'esprit de collaboration qui ont facilité la réalisation de ce projet.
+
+Ce travail m'a donné l'opportunité de consolider mes compétences techniques dans un cadre pratique.
+
+---
+
+# 1. Introduction Générale
+
+## Contexte du projet
+Dans un environnement numérique de plus en plus hostile, la sécurité des infrastructures Windows et la gestion des identités sont devenues des enjeux critiques. La majorité des attaques modernes (Ransomware, APT) exploitent des faiblesses dans l'Active Directory (AD) pour se propager. Ce projet vise à simuler ces enjeux dans un environnement contrôlé.
+
+## Présentation de l'organisme fictif (SecurinetsENIT)
+L'organisme *SecurinetsENIT* représente une structure d'entreprise standard nécessitant une ségrégation des tâches entre plusieurs départements (Finance, Marketing, IT) et une protection stricte de ses actifs numériques.
+
+## Objectifs et périmètre
+Le projet repose sur trois piliers fondamentaux :
+1. **Construction (Build) :** Déploiement d'un domaine Windows Server 2022 et des services associés.
+2. **Défense (Defend) :** Mise en place d'un pare-feu OPNsense et d'un IDS (Suricata/Zenarmor).
+3. **Attaque (Attack) :** Simulation d'attaques sur Kerberos et validation des défenses.
+
+## Planning prévisionnel
+Le projet se déroule sur une période de 8 semaines, divisée en 5 phases distinctes, allant de l'installation de base aux tests d'intrusion finaux.
+
+---
+
+# 2. Conception et Architecture
+
+## Architecture technique virtualisée
+L'infrastructure repose sur l'hyperviseur de type 2 **VirtualBox**. Elle est segmentée en deux zones distinctes pour garantir l'isolation et la sécurité du laboratoire :
+
+* **Zone WAN (Extérieure) :** Simule l'accès à Internet via une interface en NAT/Pont.
+* **Zone LAN (Interne) :** Un réseau privé isolé (Switch virtuel `intnet_securinets`) où résident nos services critiques et les postes clients.
+
+Le trafic entre ces deux zones est strictement contrôlé par la machine virtuelle **OPNsense** qui agit comme passerelle par défaut.
+
+![Architecture réseau globale et flux de communication](topologie_reseau.png)
+
+## Plan d'adressage IP
+Afin d'assurer une gestion cohérente du réseau interne, nous avons défini le plan d'adressage suivant pour le segment LAN `192.168.10.0/24`.
+
+| Machine | IP (LAN) | Rôle Principal |
+| :--- | :--- | :--- |
+| **FW-OPN-01** | 192.168.10.1 | Passerelle, Firewall et IPS |
+| **SRV-DC-01** | 192.168.10.10 | Contrôleur de Domaine, DNS, ADCS |
+| **CLT-W10** | DHCP (.50-.100) | Client de test (Simule un employé) |
+
+## Design de l'Active Directory
+Nous avons opté pour une structure organisationnelle (OU) fonctionnelle permettant d'appliquer le principe du moindre privilège. L'arborescence commence par une racine unique `SECURINETSENIT` pour se distinguer des dossiers par défaut de Windows.
+
+![Structure logique des Unités d'Organisation (OUs)](ad_structure_schema.png)
+
+## Matrice de délégation et Sécurité
+L'architecture de sécurité repose sur la séparation des devoirs. Le tableau ci-dessous résume les droits accordés aux différents acteurs du système :
+
+| Rôle / Groupe | Périmètre | Permissions et Restrictions |
+| :--- | :--- | :--- |
+| **Domain Admins** | Tout le domaine | Contrôle total de l'infrastructure. Seuls les architectes réseau possèdent ce compte. |
+| **Technical Team** | OU "Departments" | **Délégué :** Droit de réinitialiser les mots de passe des employés. <br> **Refusé :** Pas de droit d'admin sur le Contrôleur de Domaine. |
+| **Dépt. Finance** | Workstation | **Autorisé :** Accès aux dossiers comptables. <br> **Restriction :** **Accès aux clés USB bloqué** pour éviter la fuite de données (DLP). |
+| **Dépt. Marketing** | Workstation | **Autorisé :** Accès Internet large. <br> **Restriction :** **Accès au Registre (Regedit) bloqué** pour éviter les modifications système. |
+
+---
+
+# 3. Mise en place de l'infrastructure et Connectivité
+
+Ce chapitre détaille la première phase du projet ("Phase 1: Setup"), consistant à installer l'hyperviseur, configurer le routage via OPNsense et préparer les systèmes d'exploitation pour le futur domaine.
+
+## Configuration de l'Hyperviseur (VirtualBox)
+Pour ce projet, nous utilisons l'hyperviseur de type 2 **Oracle VM VirtualBox**. L'isolation du réseau est garantie par l'utilisation de deux modes réseaux distincts.
+
+### Topologie Réseau Virtuelle
+Nous avons configuré les interfaces réseaux comme suit :
+* **Interface WAN (NAT) :** Cette carte permet à la machine virtuelle OPNsense d'accéder à Internet en utilisant la connexion de l'hôte physique.
+* **Interface LAN (Réseau Interne) :** Configurée sur un réseau isolé nommé `"intnet_securinets"`. C'est sur ce switch virtuel que seront connectés le Contrôleur de Domaine et les clients.
+
+![Configuration de l'interface WAN (NAT) sous VirtualBox](NAT.jpg)
+![Configuration de l'interface LAN (Réseau Interne) sous VirtualBox](LAN.jpg)
+
+## Déploiement du Pare-feu OPNsense
+Le pare-feu est la pierre angulaire de la sécurité périmétrique. Il a été installé sur un disque virtuel avec le système de fichiers UFS.
+
+### Validation des interfaces
+Lors de la configuration initiale via la console, nous avons validé l'assignation suivante :
+* **WAN (em0) :** Obtention d'adresse IP via DHCP (Fourni par VirtualBox).
+* **LAN (em1) :** Adresse statique configurée sur **192.168.10.254/24**.
+
+![Console d'administration OPNsense et assignation des interfaces](console_opnsense.jpg)
+
+## Préparation des Systèmes Windows
+
+### Configuration IP et DNS
+Le Contrôleur de Domaine (AD-DC01) et le client ont été configurés avec des adresses statiques (ou via réservation) pour assurer la stabilité des services. Le point crucial est la configuration DNS : le client doit impérativement utiliser l'IP du serveur AD comme serveur DNS primaire.
+
+![Vérification de la configuration IP (ipconfig /all)](ipconfig.jpg)
+
+### Jonction au Domaine
+Une fois la connectivité établie, le poste client *Workstation* a été joint au domaine `securinetsenit.local`. La réussite de cette opération est confirmée par l'écran de connexion ou les propriétés système indiquant l'appartenance au domaine.
+
+![Preuve de l'intégration au domaine SECURINETSENIT](seclocal.jpg)
+
+## Validation de la Connectivité
+Avant de passer à la phase d'administration avancée, nous avons effectué des tests de connectivité (Ping) pour valider le routage et les règles de pare-feu.
+
+### Connectivité Interne (LAN)
+Le test de ping depuis le client vers le Contrôleur de Domaine (192.168.10.10) confirme que le réseau interne fonctionne.
+
+![Test de connectivité réussi vers le Contrôleur de Domaine](ping_dc.jpg)
+
+### Accès Internet (WAN)
+Le test de ping vers un DNS public (8.8.8.8) confirme que le pare-feu OPNsense effectue correctement le NAT (Network Address Translation) pour autoriser la sortie vers Internet.
+
+![Validation de l'accès Internet via le Pare-feu](ping_google.jpg)
+
+## Conclusion de la Phase 1
+L'infrastructure de base est opérationnelle. Le réseau est correctement segmenté, le pare-feu assure le routage, et les machines sont intégrées au domaine Active Directory. Cette base saine permet d'entamer la Phase 2 : la configuration avancée des objets Active Directory (Utilisateurs, OUs, GPOs).
+
+---
+
+# 4. Déploiement et Administration Active Directory
+
+Ce chapitre couvre la "Phase 2" du projet. Il détaille la structuration de l'annuaire, la délégation des droits et l'application des politiques de sécurité (GPO) générales et spécifiques pour durcir l'environnement.
+
+## Structure et Objets Active Directory
+
+### Arborescence des Unités d'Organisation (OU)
+Afin d'appliquer le principe du moindre privilège, nous avons conçu une structure hiérarchique stricte sous la racine `SECURINETSENIT`. Cette structure sépare les ressources pour appliquer des GPO ciblées :
+* **_SERVICE_ACCOUNTS :** Comptes de service isolés.
+* **COMPUTERS :** Subdivision entre *Servers* et *Workstations*.
+* **USERS :** Subdivision par département (*Finance, Marketing, IT*).
+
+![Structure hiérarchique des OUs (Console ADUC)](archi.jpg)
+
+### Gestion des Utilisateurs et Groupes
+Des utilisateurs et groupes ont été créés pour simuler l'organigramme de l'entreprise :
+* **Bob (Admin) :** Membre du groupe `Grp_Technical_Team`.
+* **Alice (Finance) :** Membre du groupe `Grp_Finance`.
+* **Marco (Marketing) :** Membre du groupe `Grp_Marketing`.
+
+## Délégation de Contrôle
+Pour éviter l'utilisation du compte "Administrateur" pour les tâches courantes, nous avons délégué le droit de **réinitialiser les mots de passe** au groupe **Grp_Technical_Team** sur l'OU des Départements.
+
+![Sélection de la tâche spécifique à déléguer](delegation_task.jpg)
+![Validation de la délégation pour le groupe Technical Team](delegation_summary.jpg)
+
+## Stratégies de Groupe (GPO) : Sécurité Globale
+
+### Politique de Mots de Passe (Default Domain Policy)
+La stratégie de mot de passe a été durcie pour tout le domaine :
+* **Longueur minimale :** 14 caractères.
+* **Historique :** 24 mots de passe mémorisés.
+* **Verrouillage :** Compte bloqué après 5 tentatives échouées.
+
+![Configuration de la complexité et longueur des mots de passe](gpo_password.jpg)
+
+### Sécurisation Standard (Utilisateurs et Postes)
+Deux GPO ont été appliquées pour sécuriser les usages basiques :
+1. **Screen Lock :** Verrouillage automatique de session après 10 minutes (600s) d'inactivité pour tous les utilisateurs des départements.
+2. **Pare-feu :** Activation forcée de Windows Defender Firewall sur tous les profils (Domaine/Privé/Public) pour les *Workstations*.
+
+![GPO forçant le verrouillage d'écran après inactivité](gpo_screenlock.jpg)
+
+## Stratégies de Groupe (GPO) : Durcissement Serveurs
+La GPO `Server_Security_Baseline`, liée à l'OU **Servers**, applique des contrôles stricts :
+
+**1. Audit et Traçabilité :** Activation de l'audit d'accès aux objets ("Object Access") pour tracer les succès et échecs.
+![Activation de l'audit système sur les serveurs](gpo_audit.jpg)
+
+**2. Sécurité Authentification :** Forçage du protocole **NTLMv2** uniquement (refus de LM et NTLMv1) et blocage de l'énumération anonyme des comptes (SID).
+![Restriction du protocole d'authentification à NTLMv2](gpo_ntlm.jpg)
+
+**3. Configuration Générale de Sécurité :** Application de paramètres de sécurité supplémentaires pour réduire la surface d'attaque du serveur.
+![Vue globale des paramètres de durcissement (Hardening) sur les serveurs](GPO_hardening.jpg)
+
+## Stratégies de Groupe (GPO) : Restrictions par Département
+Nous avons implémenté des restrictions granulaires basées sur le métier.
+
+### Département Finance : Blocage USB
+Pour prévenir la fuite de données sensibles, la GPO `Finance_Restrictions` interdit l'accès aux classes de stockage amovible ("Removable Storage Classes: Deny All Access").
+
+![Configuration du blocage des périphériques USB pour la Finance](gpo_finance.jpg)
+
+### Département Marketing : Blocage du Registre
+Pour éviter les modifications système hasardeuses, l'accès aux outils d'édition du registre (Regedit) est bloqué pour le Marketing.
+
+![Interdiction d'accès aux outils de modification du registre](gpo_marketing.jpg)
+
+### Département IT : Outils d'Administration
+À l'inverse des autres départements, la GPO `IT_Tools` autorise explicitement l'exécution de scripts PowerShell pour permettre l'administration du parc.
+
+![Autorisation de l'exécution de scripts PowerShell pour l'IT](gpo_it.jpg)
+
+## Validation Technique des Services
+
+### Validation du LDAPS (Port 636)
+La commande `netstat` confirme que le contrôleur de domaine écoute sur le port sécurisé 636.
+
+![Vérification de l'écoute du port LDAPS (636)](netstat.jpg)
+
+### Validation du protocole Kerberos
+La commande `klist`, exécutée avec un compte utilisateur, confirme l'émission d'un Ticket Granting Ticket (TGT), validant le bon fonctionnement de l'authentification Active Directory.
+
+![Preuve d'obtention des tickets Kerberos (TGT)](klist.jpg)
+
+## Conclusion de la Phase 2
+L'Active Directory est désormais pleinement opérationnel et sécurisé. La structure OUs/Groupes reflète l'organisation, les serveurs sont durcis, et chaque département dispose de droits adaptés à son métier (Finance verrouillé vs IT ouvert).
