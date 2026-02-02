@@ -926,53 +926,6 @@ This section details the implementation of the security strategies defined previ
 > * **Principle of Least Privilege:** Ensures strict confidentiality. Even if a non-finance user maps the drive manually, the server-side NTFS permissions will deny the request. Only users explicitly belonging to the `Finance Users` security group can read or write data.
 
 ---
-# 8. References & Bibliography
-
-The design and implementation of this infrastructure rely on a rigorous methodology, combining official vendor documentation (Microsoft), offensive cybersecurity modules, and practical technical guides.
-
-## 8.1 Cybersecurity & Hardening (Offensive Approach)
-These resources were used to understand common Active Directory (AD) attack vectors in order to define a relevant defense strategy (GPOs, monitoring).
-
-| Source | Topic / Module | URL |
-| :--- | :--- | :--- |
-| **HackTheBox Academy** | **Introduction to Active Directory** (Module 74)<br>This foundational module was used to master the underlying protocols and structure of the environment.<br><br>**Key Sections Applied:**<br>• *Active Directory Structure & Objects*<br>• *Kerberos, DNS, LDAP, MSRPC Protocols*<br>• *Security in Active Directory*<br>• *Examining Group Policy* | [View Module](https://academy.hackthebox.com/module/details/74) |
-
-## 8.2 Official Microsoft Documentation
-These documents constitute the theoretical basis of the project and ensure that the deployment adheres to industry standards ("Best Practices").
-
-| Source | Document / Tool | URL |
-| :--- | :--- | :--- |
-| **Microsoft Learn** | *Install Active Directory Domain Services (Level 100)*<br>Official technical guide followed for the deployment of AD DS roles. | [Microsoft Guide](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/deploy/install-active-directory-domain-services--level-100-) |
-| **Microsoft Download** | *Group Policy Settings Reference Spreadsheet*<br>Official Excel file listing all available security settings. Used as a reference baseline for configuration hardening. | [Download (Excel)](https://www.microsoft.com/en-us/download/details.aspx?id=25250) |
-
-## 8.3 Technical Articles & Administration
-Resources used for daily management and understanding of administration tools.
-
-| Source | Article | URL |
-| :--- | :--- | :--- |
-| **Netwrix Blog** | *How to Install and Use Active Directory Users and Computers*<br>Detailed tutorial on using the ADUC console and managing objects. | [Read Article](https://netwrix.com/en/resources/blog/how-to-install-and-use-active-directory-users-and-computers/) |
-
-## 8.4 Implementation Tutorials (Virtual Lab)
-These video guides served as visual support for the step-by-step configuration of the virtual infrastructure components.
-
-### A. Network Infrastructure & Security (Firewall)
-* **OPNsense Firewall Deployment**
-    * *Objective:* Installing OPNsense on VirtualBox.
-    * *Link:* [How To Install OPNsense on VirtualBox – Step by Step Guide](https://youtu.be/naYU8UR5BhQ?si=g3b0FmLPQtandvUh)
-
-### B. Server Infrastructure (Domain Controller)
-* **Server Virtualization**
-    * *Objective:* Installation of the Windows Server 2022 OS on the hypervisor.
-    * *Link:* [Installation Windows Server 2022 sur VirtualBox](https://www.youtube.com/watch?v=veDylTdgYPU)
-* **Active Directory Configuration**
-    * *Objective:* Server promotion, forest creation, and DNS configuration.
-    * *Link:* [How to Setup Active Directory Domain on Windows Server 2022](https://youtu.be/FDhndiAEyxs?si=ko4B9DqppILjNQA1)
-
-### C. Client Workstations & Integration
-* **Workstation Deployment**
-    * *Objective:* Installing Windows 10 via ISO. 
-    * *Link:* [Windows 10 ISO Setup & Installation](https://www.youtube.com/watch?v=K-8wW_QRORI)
-
 ### 4.12.7 Marketing Environment Policy
 
 **Target OU:** `USERS / Departments / Marketing`
@@ -1073,4 +1026,52 @@ These video guides served as visual support for the step-by-step configuration o
 > **💡 Technical Rationale:**
 > * **Context and Intent:** Knowing a process started is not enough. It is critical to see the **arguments** used (e.g., `net user admin /add` vs. `net user /help`).
 > * **Accountability:** This trail allows us to distinguish between a harmless administrative error and a malicious insider threat by providing the exact evidence of the command typed by the administrator.
+---
+# 5. References & Bibliography
+
+The design and implementation of this infrastructure rely on a rigorous methodology, combining official vendor documentation (Microsoft), offensive cybersecurity modules, and practical technical guides.
+
+## 5.1 Cybersecurity & Hardening (Offensive Approach)
+These resources were used to understand common Active Directory (AD) attack vectors in order to define a relevant defense strategy (GPOs, monitoring).
+
+| Source | Topic / Module | URL |
+| :--- | :--- | :--- |
+| **HackTheBox Academy** | **Introduction to Active Directory** (Module 74)<br>This foundational module was used to master the underlying protocols and structure of the environment.<br><br>**Key Sections Applied:**<br>• *Active Directory Structure & Objects*<br>• *Kerberos, DNS, LDAP, MSRPC Protocols*<br>• *Security in Active Directory*<br>• *Examining Group Policy* | [View Module](https://academy.hackthebox.com/module/details/74) |
+
+## 5.2 Official Microsoft Documentation
+These documents constitute the theoretical basis of the project and ensure that the deployment adheres to industry standards ("Best Practices").
+
+| Source | Document / Tool | URL |
+| :--- | :--- | :--- |
+| **Microsoft Learn** | *Install Active Directory Domain Services (Level 100)*<br>Official technical guide followed for the deployment of AD DS roles. | [Microsoft Guide](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/deploy/install-active-directory-domain-services--level-100-) |
+| **Microsoft Download** | *Group Policy Settings Reference Spreadsheet*<br>Official Excel file listing all available security settings. Used as a reference baseline for configuration hardening. | [Download (Excel)](https://www.microsoft.com/en-us/download/details.aspx?id=25250) |
+
+## 5.3 Technical Articles & Administration
+Resources used for daily management and understanding of administration tools.
+
+| Source | Article | URL |
+| :--- | :--- | :--- |
+| **Netwrix Blog** | *How to Install and Use Active Directory Users and Computers*<br>Detailed tutorial on using the ADUC console and managing objects. | [Read Article](https://netwrix.com/en/resources/blog/how-to-install-and-use-active-directory-users-and-computers/) |
+
+## 5.4 Implementation Tutorials (Virtual Lab)
+These video guides served as visual support for the step-by-step configuration of the virtual infrastructure components.
+
+### A. Network Infrastructure & Security (Firewall)
+* **OPNsense Firewall Deployment**
+    * *Objective:* Installing OPNsense on VirtualBox.
+    * *Link:* [How To Install OPNsense on VirtualBox – Step by Step Guide](https://youtu.be/naYU8UR5BhQ?si=g3b0FmLPQtandvUh)
+
+### B. Server Infrastructure (Domain Controller)
+* **Server Virtualization**
+    * *Objective:* Installation of the Windows Server 2022 OS on the hypervisor.
+    * *Link:* [Installation Windows Server 2022 sur VirtualBox](https://www.youtube.com/watch?v=veDylTdgYPU)
+* **Active Directory Configuration**
+    * *Objective:* Server promotion, forest creation, and DNS configuration.
+    * *Link:* [How to Setup Active Directory Domain on Windows Server 2022](https://youtu.be/FDhndiAEyxs?si=ko4B9DqppILjNQA1)
+
+### C. Client Workstations & Integration
+* **Workstation Deployment**
+    * *Objective:* Installing Windows 10 via ISO. 
+    * *Link:* [Windows 10 ISO Setup & Installation](https://www.youtube.com/watch?v=K-8wW_QRORI)
+
 
